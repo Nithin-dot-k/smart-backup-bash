@@ -1,3 +1,10 @@
-logs/
+
+# Ignore backups and logs
 backups/
+logs/
 *.log
+
+# Ignore editor and system files
+*.swp
+*.tmp
+.DS_Store

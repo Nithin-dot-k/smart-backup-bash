@@ -1,29 +1,73 @@
 #!/bin/bash
 
-# To check if the user enter the two arguments for the script
-if [ $# -ne 2 ]
+set -euo pipefail
+
+# Absolute path of this script's directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+
+#load config file
+CONFIG_FILE="$SCRIPT_DIR/config.conf"
+
+#check if the config file exits
+if [ ! -f "$CONFIG_FILE" ]
 then
-   echo "Usage: backup.sh <source_directory> <target_directory>"
-   echo "Please try again..."
+   echo "config file not found.."
    exit 1
 fi
 
-# To check the rsync is installed
-which rsync &> /dev/null 
+SOURCE_DIR=""
+TARGET_DIR=""
+DRY_RUN=false
 
-# if rsync not installed this statement excutes 
-if [ $? -ne 0 ]
+source "$CONFIG_FILE"
+
+#Validate config file
+if [ -z "$SOURCE_DIR" ] || [ -z "$TARGET_DIR" ]
 then
-   echo "The script requires rsync to be installed..."
-   echo "use : sudo apt update && sudo apt install rsync"
-   echo "Please try again..."
+   echo "SOURCE_DIR or TARGET_DIR is missing.."
    exit 2
 fi
 
-# capture the current date and store in the year-month-day format
+#check if the SOURCE_DIR exits
+if [ ! -d "$SOURCE_DIR" ]
+then
+   echo "source directory does not exit.."
+   exit 3
+fi
+
+
+#gets current date of backup
 current_date=$(date +%Y-%m-%d)
 
-#in backup store the files which altered in source dir and backuped in $current_date folder
-rsync_option="-avb --backup-dir $2/$current_date --delete"
 
-$(which rsync) $rsync_option $1 $2/current >> backup_$current_date.log
+# Prepare directories
+mkdir -p "$TARGET_DIR/current" "$TARGET_DIR/$current_date"
+mkdir -p "$SCRIPT_DIR/logs"
+
+LOG_FILE="$SCRIPT_DIR/logs/backup_$current_date.log"
+
+RSYNC_BIN=$(command -v rsync 2>/dev/null)
+
+#Check rsync
+if [ -z "$RSYNC_BIN" ]
+then
+   echo "rsync is not installed.."
+   echo "use this command to install 'sudo apt update && sudo apt install rsync'"
+   exit 4
+fi
+
+# rsync options (array = safe)
+RSYNC_OPTS=(-avb --delete --backup-dir="$TARGET_DIR/$current_date")
+
+if [ "$DRY_RUN" = "true" ]
+then
+   RSYNC_OPTS+=(-n)
+fi
+
+# Run backup
+"$RSYNC_BIN" "${RSYNC_OPTS[@]}" "$SOURCE_DIR/" "$TARGET_DIR/current/" >> "$LOG_FILE" 2>&1
+
+echo "Backup completed in $current_date" >> "$LOG_FILE"
+
+exit 0
